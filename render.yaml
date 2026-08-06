@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: vocab-quiz-app
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GOOGLE_MODEL
+        value: gemini-2.0-flash
+      - key: TEACHER_PIN
+        value: "5136"
+    # 데이터를 재배포 후에도 유지하고 싶다면 아래 disk 설정의 주석을 풀고
+    # Render 유료 플랜(디스크 지원)으로 전환하세요. DATA_DIR도 함께 맞춰주세요.
+    # disk:
+    #   name: vocab-quiz-data
+    #   mountPath: /app/data
+    #   sizeGB: 1

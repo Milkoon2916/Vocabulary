@@ -78,13 +78,19 @@ app.delete("/api/kv/:key", async (req, res) => {
   res.json({ key, deleted: true });
 });
 
-// ---------- AI 호출 프록시 (Google Gemini, API 키는 서버에서만 사용) ----------
+// ---------- AI 호출 프록시 (Google Gemini) ----------
+// 선생님이 앱 안에서 자기 API 키를 저장해두면 그 키를(x-google-api-key 헤더로) 우선 사용하고,
+// 없으면 서버 환경변수(GOOGLE_API_KEY, 관리자 기본 키)로 대체해요.
 app.post("/api/ai/generate", async (req, res) => {
   try {
-    if (!process.env.GOOGLE_API_KEY) {
-      return res
-        .status(500)
-        .json({ error: { message: "서버에 GOOGLE_API_KEY 환경변수가 설정되어 있지 않아요." } });
+    const apiKey = req.get("x-google-api-key") || process.env.GOOGLE_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({
+        error: {
+          message:
+            "사용할 Google API 키가 없어요. 앱의 '선생님 AI 키 설정'에서 본인 키를 저장하거나, 서버에 GOOGLE_API_KEY 환경변수를 설정해주세요.",
+        },
+      });
     }
     const { max_tokens, messages } = req.body || {};
     // 클라이언트는 [{ role: "user", content: "..." }] 형태로 하나만 보내요.
@@ -92,7 +98,7 @@ app.post("/api/ai/generate", async (req, res) => {
     const model = process.env.GOOGLE_MODEL || "gemini-2.0-flash";
 
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GOOGLE_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

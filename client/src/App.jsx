@@ -113,6 +113,25 @@ async function kvSet(key, value) {
   return res.json();
 }
 
+// ---------- 선생님 개인 Google API 키 (브라우저에만 저장, 서버 DB로는 전송·저장하지 않음) ----------
+const TEACHER_API_KEY_STORAGE = "vocabQuiz.teacherGoogleApiKey";
+
+function getTeacherApiKey() {
+  try {
+    return localStorage.getItem(TEACHER_API_KEY_STORAGE) || "";
+  } catch {
+    return "";
+  }
+}
+function setTeacherApiKey(key) {
+  try {
+    if (key) localStorage.setItem(TEACHER_API_KEY_STORAGE, key);
+    else localStorage.removeItem(TEACHER_API_KEY_STORAGE);
+  } catch {
+    // 브라우저가 localStorage를 막아둔 경우 조용히 무시 (서버 기본 키로 대체됨)
+  }
+}
+
 async function loadConfig() {
   try {
     const res = await kvGet("config");
@@ -219,9 +238,12 @@ function exportFolderToWord(folderName, items) {
 async function callClaudeJsonArray(prompt, maxTokens) {
   let response;
   try {
+    const headers = { "Content-Type": "application/json" };
+    const personalKey = getTeacherApiKey();
+    if (personalKey) headers["x-google-api-key"] = personalKey;
     response = await fetch("/api/ai/generate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         max_tokens: maxTokens,
         messages: [{ role: "user", content: prompt }],
@@ -588,6 +610,9 @@ function TeacherView() {
         <TabButton active={tab === "results"} onClick={() => setTab("results")}>
           결과 보기
         </TabButton>
+        <TabButton active={tab === "aikey"} onClick={() => setTab("aikey")}>
+          AI 키 설정
+        </TabButton>
       </div>
       {tab === "words" && (
         <WordsTab config={config} setConfig={setConfig} />
@@ -599,6 +624,108 @@ function TeacherView() {
         <StudentsTab config={config} setConfig={setConfig} />
       )}
       {tab === "results" && <ResultsTab config={config} />}
+      {tab === "aikey" && <ApiKeySettingsTab />}
+    </div>
+  );
+}
+
+function ApiKeySettingsTab() {
+  const [keyInput, setKeyInput] = useState("");
+  const [savedKey, setSavedKey] = useState("");
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    setSavedKey(getTeacherApiKey());
+  }, []);
+
+  const save = () => {
+    const trimmed = keyInput.trim();
+    if (!trimmed) return;
+    setTeacherApiKey(trimmed);
+    setSavedKey(trimmed);
+    setKeyInput("");
+    setNotice("이 브라우저에 키를 저장했어요. 지금부터 자동완성/지문 추출에 이 키가 사용돼요.");
+  };
+
+  const clear = () => {
+    setTeacherApiKey("");
+    setSavedKey("");
+    setNotice("저장된 키를 지웠어요. 앞으로는 서버 기본 키(설정되어 있다면)를 사용해요.");
+  };
+
+  const masked = (k) => (k.length <= 8 ? "••••••••" : `${k.slice(0, 4)}••••••••${k.slice(-4)}`);
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <SectionTitle>선생님 개인 Google API 키</SectionTitle>
+        <p className="text-sm mt-1" style={{ color: COLORS.inkSoft }}>
+          단어 자동완성이나 지문 추출을 쓸 때, 관리자가 설정해둔 서버 공용 키 대신
+          내 개인 Google API 키를 쓰고 싶다면 여기에 저장하세요. 다른 선생님들과 사용량이
+          섞이지 않고, 내 계정 할당량만 써요.
+        </p>
+        <p className="text-xs mt-2" style={{ color: COLORS.inkSoft }}>
+          이 키는 <b>이 브라우저에만</b> 저장돼요 (서버 데이터베이스에는 저장되지 않아요).
+          다른 기기나 브라우저에서 로그인하면 다시 입력해야 해요.
+        </p>
+
+        <div className="mt-4">
+          {savedKey ? (
+            <div
+              className="flex items-center justify-between flex-wrap gap-2 p-3 rounded-lg"
+              style={{ background: COLORS.okBg, border: `1px solid ${COLORS.ok}` }}
+            >
+              <span className="text-sm font-mono" style={{ color: COLORS.ok }}>
+                저장된 키: {masked(savedKey)}
+              </span>
+              <button
+                onClick={clear}
+                className="text-xs px-3 py-1.5 rounded-full"
+                style={{ background: "#fff", border: `1px solid ${COLORS.line}`, color: COLORS.bad }}
+              >
+                키 삭제
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm" style={{ color: COLORS.inkSoft }}>
+              지금은 저장된 개인 키가 없어요. 서버 기본 키(관리자가 설정했다면)를 사용해요.
+            </p>
+          )}
+        </div>
+
+        <div className="flex gap-3 mt-4">
+          <Input
+            type="password"
+            placeholder="AIza로 시작하는 Google API 키"
+            value={keyInput}
+            onChange={setKeyInput}
+            onEnter={save}
+          />
+          <button
+            onClick={save}
+            disabled={!keyInput.trim()}
+            className="px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap disabled:opacity-50"
+            style={{ background: COLORS.ok, color: "#fff" }}
+          >
+            저장
+          </button>
+        </div>
+        {notice && (
+          <p className="text-xs mt-2" style={{ color: COLORS.ok }}>{notice}</p>
+        )}
+        <p className="text-xs mt-4" style={{ color: COLORS.inkSoft }}>
+          키가 없다면{" "}
+          <a
+            href="https://aistudio.google.com/apikey"
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: COLORS.ok, textDecoration: "underline" }}
+          >
+            Google AI Studio
+          </a>
+          에서 무료로 발급받을 수 있어요.
+        </p>
+      </Card>
     </div>
   );
 }

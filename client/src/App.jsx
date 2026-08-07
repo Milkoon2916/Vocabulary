@@ -113,8 +113,8 @@ async function kvSet(key, value) {
   return res.json();
 }
 
-// ---------- 선생님 개인 Google API 키 (브라우저에만 저장, 서버 DB로는 전송·저장하지 않음) ----------
-const TEACHER_API_KEY_STORAGE = "vocabQuiz.teacherGoogleApiKey";
+// ---------- 선생님 개인 Groq API 키 (브라우저에만 저장, 서버 DB로는 전송·저장하지 않음) ----------
+const TEACHER_API_KEY_STORAGE = "vocabQuiz.teacherGroqApiKey";
 
 function getTeacherApiKey() {
   try {
@@ -240,7 +240,7 @@ async function callClaudeJsonArray(prompt, maxTokens) {
   try {
     const headers = { "Content-Type": "application/json" };
     const personalKey = getTeacherApiKey();
-    if (personalKey) headers["x-google-api-key"] = personalKey;
+    if (personalKey) headers["x-groq-api-key"] = personalKey;
     response = await fetch("/api/ai/generate", {
       method: "POST",
       headers,
@@ -658,11 +658,12 @@ function ApiKeySettingsTab() {
   return (
     <div className="space-y-6">
       <Card>
-        <SectionTitle>선생님 개인 Google API 키</SectionTitle>
+        <SectionTitle>선생님 개인 Groq API 키</SectionTitle>
         <p className="text-sm mt-1" style={{ color: COLORS.inkSoft }}>
           단어 자동완성이나 지문 추출을 쓸 때, 관리자가 설정해둔 서버 공용 키 대신
-          내 개인 Google API 키를 쓰고 싶다면 여기에 저장하세요. 다른 선생님들과 사용량이
-          섞이지 않고, 내 계정 할당량만 써요.
+          내 개인 Groq API 키를 쓰고 싶다면 여기에 저장하세요. 다른 선생님들과 사용량이
+          섞이지 않고, 내 계정 할당량만 써요. Groq는 카드 등록 없이 이메일이나
+          구글 계정으로 가입만 하면 바로 무료로 키를 받을 수 있어요.
         </p>
         <p className="text-xs mt-2" style={{ color: COLORS.inkSoft }}>
           이 키는 <b>이 브라우저에만</b> 저장돼요 (서버 데이터베이스에는 저장되지 않아요).
@@ -696,7 +697,7 @@ function ApiKeySettingsTab() {
         <div className="flex gap-3 mt-4">
           <Input
             type="password"
-            placeholder="AIza로 시작하는 Google API 키"
+            placeholder="gsk_로 시작하는 Groq API 키"
             value={keyInput}
             onChange={setKeyInput}
             onEnter={save}
@@ -716,14 +717,14 @@ function ApiKeySettingsTab() {
         <p className="text-xs mt-4" style={{ color: COLORS.inkSoft }}>
           키가 없다면{" "}
           <a
-            href="https://aistudio.google.com/apikey"
+            href="https://console.groq.com/keys"
             target="_blank"
             rel="noreferrer"
             style={{ color: COLORS.ok, textDecoration: "underline" }}
           >
-            Google AI Studio
+            Groq Console
           </a>
-          에서 무료로 발급받을 수 있어요.
+          에서 카드 등록 없이 무료로 발급받을 수 있어요.
         </p>
       </Card>
     </div>

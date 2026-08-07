@@ -78,48 +78,51 @@ app.delete("/api/kv/:key", async (req, res) => {
   res.json({ key, deleted: true });
 });
 
-// ---------- AI 호출 프록시 (Google Gemini) ----------
-// 선생님이 앱 안에서 자기 API 키를 저장해두면 그 키를(x-google-api-key 헤더로) 우선 사용하고,
-// 없으면 서버 환경변수(GOOGLE_API_KEY, 관리자 기본 키)로 대체해요.
+// ---------- AI 호출 프록시 (Groq) ----------
+// Groq는 신용카드/결제 계정 연결 없이 이메일이나 구글 계정으로 가입만 하면
+// 바로 무료 API 키를 받을 수 있어요 (https://console.groq.com/keys).
+// 선생님이 앱 안에서 자기 API 키를 저장해두면 그 키를(x-groq-api-key 헤더로) 우선 사용하고,
+// 없으면 서버 환경변수(GROQ_API_KEY, 관리자 기본 키)로 대체해요.
 app.post("/api/ai/generate", async (req, res) => {
   try {
-    const apiKey = req.get("x-google-api-key") || process.env.GOOGLE_API_KEY;
+    const apiKey = req.get("x-groq-api-key") || process.env.GROQ_API_KEY;
     if (!apiKey) {
       return res.status(500).json({
         error: {
           message:
-            "사용할 Google API 키가 없어요. 앱의 '선생님 AI 키 설정'에서 본인 키를 저장하거나, 서버에 GOOGLE_API_KEY 환경변수를 설정해주세요.",
+            "사용할 Groq API 키가 없어요. 앱의 'AI 키 설정'에서 본인 키를 저장하거나, 서버에 GROQ_API_KEY 환경변수를 설정해주세요.",
         },
       });
     }
     const { max_tokens, messages } = req.body || {};
     // 클라이언트는 [{ role: "user", content: "..." }] 형태로 하나만 보내요.
     const promptText = (messages || []).map((m) => m.content).join("\n");
-    const model = process.env.GOOGLE_MODEL || "gemini-2.0-flash";
+    const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: { maxOutputTokens: max_tokens || 1000 },
-        }),
-      }
-    );
-    const geminiData = await geminiRes.json();
+    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: max_tokens || 1000,
+        messages: [{ role: "user", content: promptText }],
+      }),
+    });
+    const groqData = await groqRes.json();
 
-    if (!geminiRes.ok) {
-      return res.status(geminiRes.status).json({
-        error: { message: geminiData?.error?.message || "Gemini API 오류" },
+    if (!groqRes.ok) {
+      return res.status(groqRes.status).json({
+        error: { message: groqData?.error?.message || "Groq API 오류" },
       });
     }
 
     // 프론트엔드가 기대하는 (Claude 스타일) 응답 형태로 변환
-    const candidate = geminiData?.candidates?.[0];
-    const text = (candidate?.content?.parts || []).map((p) => p.text || "").join("\n");
-    const stopReason = candidate?.finishReason === "MAX_TOKENS" ? "max_tokens" : "end_turn";
+    const choice = groqData?.choices?.[0];
+    const text = choice?.message?.content || "";
+    const stopReason = choice?.finish_reason === "length" ? "max_tokens" : "end_turn";
 
     res.json({
       content: [{ type: "text", text }],

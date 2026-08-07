@@ -8,7 +8,7 @@ Claude 아티팩트 안에서만 동작하던 버전을, 외부 사람들도 쓸
 | 기능 | 아티팩트 버전 | 이 버전 |
 |---|---|---|
 | 데이터 저장 | `window.storage` (Claude 전용) | Express 서버 + 파일 저장(`/api/kv/*`) |
-| AI 자동완성/지문추출 | 브라우저에서 Anthropic API 직접 호출 | 서버가 Google Gemini API를 `GOOGLE_API_KEY`로 대신 호출 (`/api/ai/generate`) |
+| AI 자동완성/지문추출 | 브라우저에서 Anthropic API 직접 호출 | 서버가 Groq API를 `GROQ_API_KEY`로 대신 호출 (`/api/ai/generate`) |
 | 선생님 비밀번호 | 클라이언트에만 하드코딩 | 클라이언트 UI 잠금 + **서버도 같은 PIN을 검증**해서 단어장/학생 데이터 쓰기를 보호 |
 
 ## 로컬에서 테스트하기
@@ -22,7 +22,7 @@ cd ..
 
 # 2) 서버 설치 및 실행
 npm install
-cp .env.example .env   # GOOGLE_API_KEY 채워넣기
+cp .env.example .env   # GROQ_API_KEY 채워넣기
 node server.js
 ```
 
@@ -42,7 +42,7 @@ cd client && npm run dev
 ### 방법 A — Blueprint(render.yaml)로 한번에
 1. 이 폴더를 GitHub 저장소로 올려요.
 2. Render 대시보드 → **New +** → **Blueprint** → 저장소 선택 (`render.yaml`을 자동으로 인식해요).
-3. `GOOGLE_API_KEY` 값을 입력하라고 물어보면 채워넣어요 (`sync: false`라서 대시보드에서 직접 입력).
+3. `GROQ_API_KEY` 값을 입력하라고 물어보면 채워넣어요 (`sync: false`라서 대시보드에서 직접 입력).
 4. Deploy.
 
 ### 방법 B — Docker 서비스 수동 생성
@@ -50,23 +50,23 @@ cd client && npm run dev
 2. Render 대시보드 → **New +** → **Web Service** → 저장소 선택.
 3. **Runtime**을 `Docker`로 선택 (Dockerfile을 자동으로 찾아요).
 4. **Environment** 탭에서 아래 값을 추가:
-   - `GOOGLE_API_KEY` = 여러분의 Google AI (Gemini) API 키 (필수)
+   - `GROQ_API_KEY` = 여러분의 Groq API 키 (필수, 카드 등록 불필요)
    - `TEACHER_PIN` = 선생님 모드 비밀번호 (선택, 기본 `5136`)
-   - `GOOGLE_MODEL` = 사용할 모델 (선택, 기본 `gemini-2.0-flash`)
+   - `GROQ_MODEL` = 사용할 모델 (선택, 기본 `llama-3.3-70b-versatile`)
 5. Deploy 누르면 끝. 몇 분 뒤 `https://your-app.onrender.com` 같은 주소가 생겨요 — 이 주소를 학생들에게 공유하면 돼요.
 
 ## 선생님별 개인 API 키 (선택 기능)
 
-앱 안에 "AI 키 설정" 탭이 있어요. 선생님이 여기에 본인의 Google API 키를 저장하면:
+앱 안에 "AI 키 설정" 탭이 있어요. 선생님이 여기에 본인의 Groq API 키를 저장하면:
 
 - 그 브라우저에서는 이후 자동완성/지문 추출 요청에 **그 선생님의 키**가 사용돼요.
-- 서버의 `GOOGLE_API_KEY`(관리자 공용 키)는 개인 키를 저장하지 않은 선생님을 위한 기본값으로 남아있어요.
+- 서버의 `GROQ_API_KEY`(관리자 공용 키)는 개인 키를 저장하지 않은 선생님을 위한 기본값으로 남아있어요.
 - 개인 키는 **브라우저의 localStorage에만 저장**되고, 서버 데이터베이스에는 절대 저장되지 않아요. (요청할 때마다 헤더로만 잠깐 전달돼요.)
 
 이렇게 하면 여러 선생님이 한꺼번에 써도 한 키의 무료 할당량에 다 같이 몰려서 429 오류가
 나는 상황을 피할 수 있어요 — 각자 자기 계정 할당량을 쓰게 되니까요.
 
-`GOOGLE_API_KEY` 서버 환경변수 자체는 필수는 아니에요. 모든 선생님이 각자 개인 키를 쓸 거라면
+`GROQ_API_KEY` 서버 환경변수 자체는 필수는 아니에요. 모든 선생님이 각자 개인 키를 쓸 거라면
 설정 안 해도 되고, 대신 개인 키를 안 넣은 선생님이 접속하면 "키가 없다"는 안내를 받게 돼요.
 
 ## 선생님 비밀번호(PIN) 관련 주의
@@ -94,7 +94,7 @@ cd client && npm run dev
 외부에 완전히 공개하신다면 아래 정도는 참고해주세요:
 
 - 학생 퀴즈 결과 저장(`results:*`)은 PIN 없이 누구나 쓸 수 있게 열려 있어요 (학생이 로그인 없이 코드만으로 퀴즈를 풀어야 하기 때문). 학생 코드를 아는 사람만 자기 결과를 저장할 수 있다는 정도의 보호예요.
-- `GOOGLE_API_KEY`는 서버 환경변수로만 있고 클라이언트에는 절대 노출되지 않아요 — 이 부분은 안전해요.
+- `GROQ_API_KEY`는 서버 환경변수로만 있고 클라이언트에는 절대 노출되지 않아요 — 이 부분은 안전해요.
 - 접속자 수가 많아지거나 악의적인 사용이 걱정되면, 서버에 요청 속도 제한(rate limit)이나 진짜 로그인 시스템을 추가하는 걸 권장해요.
 
 ## 폴더 구조

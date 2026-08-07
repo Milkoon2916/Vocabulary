@@ -313,7 +313,7 @@ async function fetchWordDetails(words) {
 ${words.join(", ")}`;
 
   // 단어 수에 비례해서 토큰 한도를 넉넉하게 잡아 응답이 중간에 잘리지 않게 함
-  const maxTokens = Math.min(8000, Math.max(1000, words.length * 350 + 500));
+  const maxTokens = Math.min(6000, Math.max(1000, words.length * 350 + 500));
   return callClaudeJsonArray(prompt, maxTokens);
 }
 
@@ -1306,6 +1306,7 @@ function PassageExtractTab({ config, setConfig }) {
   const [passage, setPassage] = useState("");
   const [destFolder, setDestFolder] = useState(DEFAULT_FOLDER);
   const [extractCount, setExtractCount] = useState(20);
+  const [minExtractCount, setMinExtractCount] = useState(5);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -1319,7 +1320,8 @@ function PassageExtractTab({ config, setConfig }) {
     setError("");
     setExtracted([]);
     const prompt = `당신은 한국 고등학교 1학년(고1) 영어 어휘 학습 자료를 만드는 도우미입니다.
-아래 영어 지문에서 고1 학습자에게 유용한 핵심 어휘를 최대 ${extractCount}개 골라주세요. 지문이 짧아서 그만큼 안 나오면 나오는 만큼만 골라도 됩니다. 같은 단어를 중복해서 넣지 마세요.
+아래 영어 지문에서 고1 학습자에게 유용한 핵심 어휘를 최소 ${minExtractCount}개, 최대 ${extractCount}개 골라주세요.
+가능하면 반드시 최소 개수 이상을 채워주세요 — 지문에 실제로 등장하는 단어라면, 아주 쉬운 단어라도 좋으니 최소 개수를 맞추는 걸 우선하세요. 지문 자체가 너무 짧아서 그래도 최소 개수를 못 채운다면 나오는 만큼만 골라도 됩니다. 같은 단어를 중복해서 넣지 마세요.
 다른 설명이나 인사말, 마크다운 코드블록 없이 순수 JSON 배열만 출력하세요. 각 항목은 아래 형식을 따르세요.
 
 [
@@ -1337,7 +1339,7 @@ function PassageExtractTab({ config, setConfig }) {
 ${passage.trim()}
 """`;
     try {
-      const maxTokens = Math.min(8000, Math.max(1200, extractCount * 350 + 500));
+      const maxTokens = Math.min(6000, Math.max(1200, extractCount * 350 + 500));
       const parsed = await callClaudeJsonArray(prompt, maxTokens);
       const entries = parsed
         .map((p) => ({
@@ -1444,6 +1446,21 @@ ${passage.trim()}
             </datalist>
           </div>
           <div>
+            <label className="text-xs" style={{ color: COLORS.inkSoft }}>최소 단어 수</label>
+            <input
+              type="number"
+              min={1}
+              max={extractCount}
+              value={minExtractCount}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10) || 1;
+                setMinExtractCount(Math.max(1, Math.min(extractCount, v)));
+              }}
+              className="block mt-1 w-20 p-2 rounded-lg text-sm outline-none"
+              style={{ border: `1px solid ${COLORS.line}`, fontSize: "16px" }}
+            />
+          </div>
+          <div>
             <label className="text-xs" style={{ color: COLORS.inkSoft }}>최대 단어 수</label>
             <input
               type="number"
@@ -1452,7 +1469,9 @@ ${passage.trim()}
               value={extractCount}
               onChange={(e) => {
                 const v = parseInt(e.target.value, 10) || 1;
-                setExtractCount(Math.max(1, Math.min(50, v)));
+                const next = Math.max(1, Math.min(50, v));
+                setExtractCount(next);
+                setMinExtractCount((prevMin) => Math.min(prevMin, next));
               }}
               className="block mt-1 w-20 p-2 rounded-lg text-sm outline-none"
               style={{ border: `1px solid ${COLORS.line}`, fontSize: "16px" }}
@@ -1469,7 +1488,7 @@ ${passage.trim()}
           </button>
         </div>
         <p className="text-xs mt-1" style={{ color: COLORS.inkSoft }}>
-          (최대 50개까지 늘릴 수 있어요. 다만 지문 길이에 따라 뽑히는 단어 수는 그보다 적을 수 있어요.)
+          (최대 50개까지 늘릴 수 있어요. 최소 개수는 AI가 최대한 맞추려고 하지만, 지문이 아주 짧으면 그보다 적게 나올 수 있어요.)
         </p>
         {error && (
           <p className="text-xs mt-2" style={{ color: COLORS.bad }}>{error}</p>

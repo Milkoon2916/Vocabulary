@@ -78,6 +78,33 @@ app.delete("/api/kv/:key", async (req, res) => {
   res.json({ key, deleted: true });
 });
 
+// Groq의 429 응답에서 "몇 초 후 재시도"를 찾아냄 (retry-after 헤더 우선, 없으면 에러 메시지 문구에서 파싱)
+function parseRetrySeconds(headers, message) {
+  const headerVal = headers?.get?.("retry-after");
+  if (headerVal) {
+    const n = parseFloat(headerVal);
+    if (!isNaN(n) && n >= 0) return n;
+  }
+  const match = /try again in\s+([\d.]+)s/i.exec(message || "");
+  if (match) return parseFloat(match[1]);
+  return null;
+}
+
+async function callGroq(apiKey, model, promptText, maxTokens) {
+  return fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens || 1000,
+      messages: [{ role: "user", content: promptText }],
+    }),
+  });
+}
+
 // ---------- AI 호출 프록시 (Groq) ----------
 // Groq는 신용카드/결제 계정 연결 없이 이메일이나 구글 계정으로 가입만 하면
 // 바로 무료 API 키를 받을 수 있어요 (https://console.groq.com/keys).
@@ -99,24 +126,26 @@ app.post("/api/ai/generate", async (req, res) => {
     const promptText = (messages || []).map((m) => m.content).join("\n");
     const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
-    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: max_tokens || 1000,
-        messages: [{ role: "user", content: promptText }],
-      }),
-    });
-    const groqData = await groqRes.json();
+    let groqRes = await callGroq(apiKey, model, promptText, max_tokens);
+    let groqData = await groqRes.json();
+
+    // 순간적으로 분당 토큰 한도(TPM)에 걸린 경우, 안내된 시간만큼 한 번 기다렸다가 자동으로 재시도
+    if (groqRes.status === 429) {
+      const waitSec = parseRetrySeconds(groqRes.headers, groqData?.error?.message);
+      if (waitSec !== null && waitSec <= 45) {
+        await new Promise((r) => setTimeout(r, Math.ceil(waitSec * 1000) + 500));
+        groqRes = await callGroq(apiKey, model, promptText, max_tokens);
+        groqData = await groqRes.json();
+      }
+    }
 
     if (!groqRes.ok) {
-      return res.status(groqRes.status).json({
-        error: { message: groqData?.error?.message || "Groq API 오류" },
-      });
+      const baseMsg = groqData?.error?.message || "Groq API 오류";
+      const friendly =
+        groqRes.status === 429
+          ? `${baseMsg} (요청이 몰려서 생기는 일시적인 속도 제한이에요. 잠시 후 다시 시도해주세요. 자주 발생한다면 '최대 단어 수'를 줄여보세요.)`
+          : baseMsg;
+      return res.status(groqRes.status).json({ error: { message: friendly } });
     }
 
     // 프론트엔드가 기대하는 (Claude 스타일) 응답 형태로 변환

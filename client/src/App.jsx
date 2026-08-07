@@ -1386,7 +1386,8 @@ function PassageExtractTab({ config, setConfig }) {
   const [destFolder, setDestFolder] = useState(DEFAULT_FOLDER);
   const [extractCount, setExtractCount] = useState(20);
   const [minExtractCount, setMinExtractCount] = useState(5);
-  const [difficulty, setDifficulty] = useState("standard");
+  const [lexileMin, setLexileMin] = useState(1000);
+  const [lexileMax, setLexileMax] = useState(1700);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -1399,28 +1400,29 @@ function PassageExtractTab({ config, setConfig }) {
     setLoading(true);
     setError("");
     setExtracted([]);
-    const DIFFICULTY_INSTRUCTIONS = {
-      standard:
-        "고1 교과서·모의고사에 나올 법한 필수 어휘 수준으로 골라주세요. 초등·중학교 기초 단어(예: happy, big, run, nice, want, like, said, went 같은 이미 다 아는 기초 단어)는 절대 포함하지 마세요.",
-      advanced:
-        "고1~2 심화 수준 또는 수능 대비 어휘 위주로 골라주세요. 중학교~고1 기초 단어는 모두 제외하고, 다음을 우선하세요: 학생들이 뜻을 모를 가능성이 높은 단어, 문맥에 따라 뜻이 여러 개인 다의어, 추상적인 개념을 나타내는 단어.",
-      expert:
-        "수능 고난도 어휘·고3 수준의 단어 위주로 골라주세요. 일상적으로 자주 쓰이는 단어는 모두 제외하고, 학술적·추상적인 단어, 자주 헷갈리는 다의어, 격식체 어휘를 우선하세요.",
-    };
-    const difficultyNote = DIFFICULTY_INSTRUCTIONS[difficulty] || DIFFICULTY_INSTRUCTIONS.standard;
 
-    const prompt = `당신은 한국 고등학교 영어 어휘 학습 자료를 만드는 도우미입니다.
+    const loMin = Math.min(lexileMin, lexileMax);
+    const hiMax = Math.max(lexileMin, lexileMax);
+
+    const prompt = `당신은 한국 고등학교 영어 어휘 학습 자료를 만드는 도우미이며, Lexile(렉사일) 지수 체계에 정통한 어휘 난이도 평가자입니다.
 아래 영어 지문에서 학습자에게 유용한 핵심 어휘를 최소 ${minExtractCount}개, 최대 ${extractCount}개 골라주세요.
 
-난이도 기준: ${difficultyNote}
+난이도 기준 (Lexile 지수): 각 단어의 개별 난이도를 해당 단어가 일반적으로 쓰이는 텍스트의 Lexile 지수로 추정했을 때, **${loMin}L 이상 ${hiMax}L 이하**에 해당하는 단어만 고르세요.
+- ${loMin}L~${hiMax}L 범위는 대략 중상급~고급 수준의 학술적·추상적 어휘, 다의어, 격식체 어휘에 해당합니다. 숫자가 낮을수록 쉬운 단어, 높을수록 어려운 단어입니다.
+- 이 범위보다 쉬운 기초 단어(예: happy, big, run, nice, want, like, said, went 같은 초등·중학교 수준 단어)는 절대 포함하지 마세요.
+- 이 범위보다 훨씬 어려운 극희귀 전문용어나 고어체 단어도 제외하세요.
+- 개수보다 Lexile 범위 기준이 더 중요합니다 — 기준에 맞는 단어가 부족해서 최소 개수를 못 채우더라도, 범위를 벗어나는 단어로 억지로 채우지 마세요. 나오는 만큼만 골라도 됩니다.
+- 같은 단어를 중복해서 넣지 마세요.
 
-개수보다 난이도 기준이 더 중요합니다 — 기준에 맞는 단어가 부족해서 최소 개수를 못 채우더라도, 기준에 안 맞는 쉬운 단어로 억지로 채우지 마세요. 나오는 만큼만 골라도 됩니다. 같은 단어를 중복해서 넣지 마세요.
+각 단어마다 그 단어의 추정 Lexile 지수(정수, "estimatedLexile")도 함께 제시하세요. 이 값은 반드시 ${loMin}~${hiMax} 사이여야 합니다.
+
 다른 설명이나 인사말, 마크다운 코드블록 없이 순수 JSON 배열만 출력하세요. 각 항목은 아래 형식을 따르세요.
 
 [
   {
     "word": "지문에 등장한 단어(원형 또는 지문 속 활용형)",
     "meaning": "간결한 한국어 뜻",
+    "estimatedLexile": ${loMin}~${hiMax} 사이의 정수,
     "example": "이 단어가 포함된 지문 속 문장을 원문 그대로 인용",
     "exampleKo": "위 example 문장을 자연스러운 한국어로 번역",
     "synonyms": ["같은 수준의 유의어 (영어, 최대 2개)"],
@@ -1440,17 +1442,30 @@ ${passage.trim()}
           id: uid(),
           word: (p.word || "").trim(),
           meaning: (p.meaning || "").trim(),
+          estimatedLexile: Number.isFinite(Number(p.estimatedLexile)) ? Math.round(Number(p.estimatedLexile)) : null,
           example: (p.example || "").trim(),
           exampleKo: (p.exampleKo || "").trim(),
           synonyms: Array.isArray(p.synonyms) ? p.synonyms.join(", ") : "",
           antonyms: Array.isArray(p.antonyms) ? p.antonyms.join(", ") : "",
           include: true,
         }))
-        .filter((e) => e.word && e.meaning);
+        .filter((e) => e.word && e.meaning)
+        // 안전장치: AI가 범위를 벗어난 값을 준 경우 기본적으로 선택 해제만 하고 목록에는 남겨서
+        // 선생님이 직접 확인/포함 여부를 결정할 수 있게 함
+        .map((e) => ({
+          ...e,
+          include: e.estimatedLexile == null ? true : e.estimatedLexile >= loMin && e.estimatedLexile <= hiMax,
+        }));
       if (entries.length === 0) {
         setError("지문에서 단어를 추출하지 못했어요. 다른 지문으로 시도해보세요.");
       }
+      const outOfRange = entries.filter((e) => !e.include).length;
       setExtracted(entries);
+      if (outOfRange > 0) {
+        setNotice(`${outOfRange}개 단어는 추정 Lexile 지수(${loMin}~${hiMax}L)를 벗어나 기본적으로 선택 해제되어 있어요. 필요하면 체크해서 포함하세요.`);
+      } else {
+        setNotice("");
+      }
     } catch (e) {
       console.error("추출 실패", e);
       setError(`추출 중 문제가 발생했어요: ${e.message || "알 수 없는 오류"}`);
@@ -1514,7 +1529,7 @@ ${passage.trim()}
           <SectionTitle>지문에서 단어 자동 추출</SectionTitle>
         </div>
         <p className="text-xs mt-1" style={{ color: COLORS.inkSoft }}>
-          영어 지문을 붙여넣으면 고1 수준의 핵심 어휘와 뜻, 예문, 해석, 유의어·반의어까지 자동으로 뽑아줘요. 결과는 추가하기 전에 검토·수정할 수 있어요.
+          영어 지문을 붙여넣으면 설정한 Lexile 지수 범위(기본 1000L~1700L)에 맞는 핵심 어휘와 뜻, 예문, 해석, 유의어·반의어까지 자동으로 뽑아줘요. 결과는 추가하기 전에 검토·수정할 수 있어요.
         </p>
         <textarea
           value={passage}
@@ -1542,17 +1557,36 @@ ${passage.trim()}
             </datalist>
           </div>
           <div>
-            <label className="text-xs" style={{ color: COLORS.inkSoft }}>난이도</label>
-            <select
-              value={difficulty}
-              onChange={(e) => setDifficulty(e.target.value)}
-              className="block mt-1 p-2 rounded-lg text-sm outline-none"
+            <label className="text-xs" style={{ color: COLORS.inkSoft }}>Lexile 최소</label>
+            <input
+              type="number"
+              min={200}
+              max={2000}
+              step={50}
+              value={lexileMin}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10) || 200;
+                setLexileMin(Math.max(200, Math.min(2000, v)));
+              }}
+              className="block mt-1 w-24 p-2 rounded-lg text-sm outline-none"
               style={{ border: `1px solid ${COLORS.line}`, fontSize: "16px" }}
-            >
-              <option value="standard">고1 필수</option>
-              <option value="advanced">고1~2 심화 · 수능 대비</option>
-              <option value="expert">수능 고난도 · 고3</option>
-            </select>
+            />
+          </div>
+          <div>
+            <label className="text-xs" style={{ color: COLORS.inkSoft }}>Lexile 최대</label>
+            <input
+              type="number"
+              min={200}
+              max={2000}
+              step={50}
+              value={lexileMax}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10) || 200;
+                setLexileMax(Math.max(200, Math.min(2000, v)));
+              }}
+              className="block mt-1 w-24 p-2 rounded-lg text-sm outline-none"
+              style={{ border: `1px solid ${COLORS.line}`, fontSize: "16px" }}
+            />
           </div>
           <div>
             <label className="text-xs" style={{ color: COLORS.inkSoft }}>최소 단어 수</label>
@@ -1633,6 +1667,20 @@ ${passage.trim()}
                     className="mt-2.5"
                   />
                   <div className="flex-1 grid sm:grid-cols-2 gap-2">
+                    <div className="sm:col-span-2 flex items-center gap-2">
+                      {e.estimatedLexile != null && (
+                        <span
+                          className="text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0"
+                          style={{
+                            background: e.include ? "#eef7ee" : "#f0e6e6",
+                            color: e.include ? COLORS.ok : COLORS.bad,
+                            border: `1px solid ${e.include ? COLORS.ok : COLORS.bad}`,
+                          }}
+                        >
+                          {e.estimatedLexile}L
+                        </span>
+                      )}
+                    </div>
                     <Input
                       placeholder="단어"
                       value={e.word}

@@ -1450,11 +1450,13 @@ ${passage.trim()}
             <input
               type="number"
               min={1}
-              max={extractCount}
+              max={50}
               value={minExtractCount}
               onChange={(e) => {
                 const v = parseInt(e.target.value, 10) || 1;
-                setMinExtractCount(Math.max(1, Math.min(extractCount, v)));
+                const next = Math.max(1, Math.min(50, v));
+                setMinExtractCount(next);
+                setExtractCount((prevMax) => Math.max(prevMax, next));
               }}
               className="block mt-1 w-20 p-2 rounded-lg text-sm outline-none"
               style={{ border: `1px solid ${COLORS.line}`, fontSize: "16px" }}

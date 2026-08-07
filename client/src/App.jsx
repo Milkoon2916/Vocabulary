@@ -296,7 +296,7 @@ async function callClaudeJsonArray(prompt, maxTokens) {
 // ---------- AI 단어 정보 자동완성 ----------
 async function fetchWordDetails(words) {
   const prompt = `당신은 한국 고등학교 1학년(고1) 영어 어휘 학습 자료를 만드는 도우미입니다.
-아래 영어 단어 목록 각각에 대해 자연스러운 한국어 뜻, 그 단어를 포함한 영어 예문, 유의어, 반의어를 만들어주세요.
+아래 영어 단어 목록 각각에 대해 자연스러운 한국어 뜻, 그 단어를 포함한 영어 예문, 그 예문의 자연스러운 한국어 번역, 유의어, 반의어를 만들어주세요.
 다른 설명이나 인사말, 마크다운 코드블록 없이 순수 JSON 배열만 출력하세요. 목록의 순서와 개수를 그대로 유지하세요. 각 항목은 아래 형식을 따르세요.
 
 [
@@ -304,6 +304,7 @@ async function fetchWordDetails(words) {
     "word": "입력된 단어 그대로",
     "meaning": "간결한 한국어 뜻",
     "example": "이 단어를 포함한 자연스러운 영어 예문",
+    "exampleKo": "위 example 문장을 자연스러운 한국어로 번역한 문장",
     "synonyms": ["고1 수준 유의어 (영어, 최대 2개)"],
     "antonyms": ["고1 수준 반의어 (영어, 있는 경우만 최대 2개)"]
   }
@@ -357,9 +358,8 @@ function buildQuiz(wordsets, wordStats, count, distractorPool) {
 
   return picked.map((word) => {
     const others = dPool.filter((w) => w.id !== word.id);
-    const canBlank =
-      word.example &&
-      word.example.toLowerCase().includes(word.word.toLowerCase());
+    // 빈칸(주관식) 문제는 "문장 전체의 한글 해석"이 있어야 낼 수 있어요.
+    const canBlank = word.exampleKo && word.exampleKo.trim().length > 0;
     const hasSyn = (word.synonyms || []).length > 0;
     const hasAnt = (word.antonyms || []).length > 0;
     const typeChoices = ["meaning", "word"];
@@ -420,14 +420,12 @@ function buildQuiz(wordsets, wordStats, count, distractorPool) {
         answer,
       };
     }
-    // blank
-    const re = new RegExp(word.word, "i");
-    const sentence = word.example.replace(re, "_____");
+    // blank: 문장 전체의 한글 해석을 보여주고, 학생이 빈칸에 들어갈 영단어를 직접 입력
     return {
       id: word.id,
       word,
       type,
-      prompt: sentence,
+      prompt: word.exampleKo,
       answer: word.word,
     };
   });
@@ -751,6 +749,7 @@ function WordsTab({ config, setConfig }) {
   const [word, setWord] = useState("");
   const [meaning, setMeaning] = useState("");
   const [example, setExample] = useState("");
+  const [exampleKo, setExampleKo] = useState("");
   const [folder, setFolder] = useState(DEFAULT_FOLDER);
   const [synonyms, setSynonyms] = useState("");
   const [antonyms, setAntonyms] = useState("");
@@ -797,6 +796,7 @@ function WordsTab({ config, setConfig }) {
       word: word.trim(),
       meaning: meaning.trim(),
       example: example.trim(),
+      exampleKo: exampleKo.trim(),
       folder: folder.trim() || DEFAULT_FOLDER,
       synonyms: synonyms.split(",").map((s) => s.trim()).filter(Boolean),
       antonyms: antonyms.split(",").map((s) => s.trim()).filter(Boolean),
@@ -805,6 +805,7 @@ function WordsTab({ config, setConfig }) {
     setWord("");
     setMeaning("");
     setExample("");
+    setExampleKo("");
     setSynonyms("");
     setAntonyms("");
   };
@@ -879,6 +880,7 @@ function WordsTab({ config, setConfig }) {
       if (info) {
         setMeaning((info.meaning || "").trim());
         setExample((info.example || "").trim());
+        setExampleKo((info.exampleKo || "").trim());
         setSynonyms(Array.isArray(info.synonyms) ? info.synonyms.join(", ") : "");
         setAntonyms(Array.isArray(info.antonyms) ? info.antonyms.join(", ") : "");
       } else {
@@ -909,6 +911,7 @@ function WordsTab({ config, setConfig }) {
           word: (p.word || "").trim(),
           meaning: (p.meaning || "").trim(),
           example: (p.example || "").trim(),
+          exampleKo: (p.exampleKo || "").trim(),
           synonyms: Array.isArray(p.synonyms) ? p.synonyms.join(", ") : "",
           antonyms: Array.isArray(p.antonyms) ? p.antonyms.join(", ") : "",
           include: true,
@@ -956,6 +959,7 @@ function WordsTab({ config, setConfig }) {
       word: e.word,
       meaning: e.meaning,
       example: e.example,
+      exampleKo: e.exampleKo,
       folder: autoDestFolder.trim() || DEFAULT_FOLDER,
       synonyms: e.synonyms.split(",").map((s) => s.trim()).filter(Boolean),
       antonyms: e.antonyms.split(",").map((s) => s.trim()).filter(Boolean),
@@ -982,7 +986,7 @@ function WordsTab({ config, setConfig }) {
           </span>
         </div>
         <p className="text-xs mt-1" style={{ color: COLORS.inkSoft }}>
-          단어만 입력하고 <Sparkles size={11} className="inline -mt-0.5" style={{ color: COLORS.ok }} /> 버튼을 누르면 뜻·예문·유의어·반의어를 AI가 채워줘요.
+          단어만 입력하고 <Sparkles size={11} className="inline -mt-0.5" style={{ color: COLORS.ok }} /> 버튼을 누르면 뜻·예문·해석·유의어·반의어를 AI가 채워줘요.
         </p>
         <div className="grid sm:grid-cols-4 gap-3 mt-3">
           <div className="flex gap-1.5">
@@ -1016,6 +1020,14 @@ function WordsTab({ config, setConfig }) {
               ))}
             </datalist>
           </div>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-3 mt-3">
+          <Input
+            placeholder="예문 해석 (한글, 선택 — 주관식 빈칸 문제에 사용돼요)"
+            value={exampleKo}
+            onChange={setExampleKo}
+            disabled={remainingSlots <= 0}
+          />
         </div>
         <div className="grid sm:grid-cols-2 gap-3 mt-3">
           <Input
@@ -1053,7 +1065,7 @@ function WordsTab({ config, setConfig }) {
           <SectionTitle>단어만 입력하면 AI가 채워줄게요</SectionTitle>
         </div>
         <p className="text-xs mt-1" style={{ color: COLORS.inkSoft }}>
-          단어를 줄바꿈이나 쉼표로 구분해서 여러 개 붙여넣으면, 뜻·예문·유의어·반의어를 AI가 한번에 만들어줘요. 추가하기 전에 검토·수정할 수 있어요.
+          단어를 줄바꿈이나 쉼표로 구분해서 여러 개 붙여넣으면, 뜻·예문·해석·유의어·반의어를 AI가 한번에 만들어줘요. 추가하기 전에 검토·수정할 수 있어요.
         </p>
         <textarea
           value={autoWordsInput}
@@ -1133,6 +1145,13 @@ function WordsTab({ config, setConfig }) {
                           onChange={(v) => updateAutoEntry(e.id, "example", v)}
                         />
                       </div>
+                      <div className="sm:col-span-2">
+                        <Input
+                          placeholder="예문 해석 (한글)"
+                          value={e.exampleKo}
+                          onChange={(v) => updateAutoEntry(e.id, "exampleKo", v)}
+                        />
+                      </div>
                       <Input
                         placeholder="유의어 (쉼표 구분)"
                         value={e.synonyms}
@@ -1168,6 +1187,9 @@ function WordsTab({ config, setConfig }) {
         <SectionTitle>여러 개 한번에 추가</SectionTitle>
         <p className="text-xs mt-1" style={{ color: COLORS.inkSoft }}>
           한 줄에 하나씩, "단어,뜻,예문" 형식으로 입력하세요. 예문은 생략 가능합니다. (전체 {MAX_WORDS}개까지)
+        </p>
+        <p className="text-xs mt-1" style={{ color: COLORS.inkSoft }}>
+          이 방식으로 추가한 단어는 예문 해석(exampleKo)이 비어 있어서 주관식 빈칸 문제로는 출제되지 않아요. 필요하면 등록 후 "단어 관리" 목록에서 개별적으로 채워주세요.
         </p>
         <div className="mt-2">
           <label className="text-xs" style={{ color: COLORS.inkSoft }}>이 목록을 넣을 폴더</label>
@@ -1265,31 +1287,7 @@ function WordsTab({ config, setConfig }) {
                   </div>
                   <div className="divide-y" style={{ borderColor: COLORS.line }}>
                     {items.map((w) => (
-                      <div key={w.id} className="py-2 flex items-start justify-between gap-3">
-                        <div>
-                          <div className="font-medium">{w.word} <span style={{ color: COLORS.inkSoft }}>— {w.meaning}</span></div>
-                          {w.example && (
-                            <div className="text-xs mt-0.5" style={{ color: COLORS.inkSoft }}>{w.example}</div>
-                          )}
-                          {((w.synonyms && w.synonyms.length > 0) || (w.antonyms && w.antonyms.length > 0)) && (
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {(w.synonyms || []).map((s) => (
-                                <span key={"syn-" + s} className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: COLORS.okBg, color: COLORS.ok }}>
-                                  유= {s}
-                                </span>
-                              ))}
-                              {(w.antonyms || []).map((s) => (
-                                <span key={"ant-" + s} className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: COLORS.badBg, color: COLORS.bad }}>
-                                  반= {s}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <button onClick={() => remove(w.id)} className="p-1.5 rounded-full hover:opacity-70">
-                          <Trash2 size={15} style={{ color: COLORS.bad }} />
-                        </button>
-                      </div>
+                      <WordListRow key={w.id} w={w} onRemove={() => remove(w.id)} onUpdate={(patch) => commit(config.wordsets.map((x) => (x.id === w.id ? { ...x, ...patch } : x)))} />
                     ))}
                   </div>
                 </div>
@@ -1298,6 +1296,87 @@ function WordsTab({ config, setConfig }) {
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+// 등록된 단어 한 줄 — 예문 해석(exampleKo)을 나중에라도 채워 넣을 수 있도록 인라인 편집 지원
+function WordListRow({ w, onRemove, onUpdate }) {
+  const [editingKo, setEditingKo] = useState(false);
+  const [koDraft, setKoDraft] = useState(w.exampleKo || "");
+
+  const saveKo = () => {
+    onUpdate({ exampleKo: koDraft.trim() });
+    setEditingKo(false);
+  };
+
+  return (
+    <div className="py-2 flex items-start justify-between gap-3">
+      <div className="flex-1">
+        <div className="font-medium">{w.word} <span style={{ color: COLORS.inkSoft }}>— {w.meaning}</span></div>
+        {w.example && (
+          <div className="text-xs mt-0.5" style={{ color: COLORS.inkSoft }}>{w.example}</div>
+        )}
+        {!editingKo ? (
+          <div className="text-xs mt-0.5 flex items-center gap-2 flex-wrap">
+            {w.exampleKo ? (
+              <span style={{ color: COLORS.ok }}>해석: {w.exampleKo}</span>
+            ) : (
+              <span style={{ color: COLORS.inkSoft }}>해석 없음 (주관식 빈칸 문제 미출제)</span>
+            )}
+            <button
+              onClick={() => {
+                setKoDraft(w.exampleKo || "");
+                setEditingKo(true);
+              }}
+              className="text-[11px] underline"
+              style={{ color: COLORS.inkSoft }}
+            >
+              {w.exampleKo ? "수정" : "해석 추가"}
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 mt-1">
+            <Input
+              placeholder="예문 해석 (한글)"
+              value={koDraft}
+              onChange={setKoDraft}
+              onEnter={saveKo}
+            />
+            <button
+              onClick={saveKo}
+              className="text-[11px] px-2 py-1 rounded-full whitespace-nowrap"
+              style={{ background: COLORS.ok, color: "#fff" }}
+            >
+              저장
+            </button>
+            <button
+              onClick={() => setEditingKo(false)}
+              className="text-[11px] px-2 py-1 rounded-full whitespace-nowrap"
+              style={{ background: "#fff", border: `1px solid ${COLORS.line}`, color: COLORS.inkSoft }}
+            >
+              취소
+            </button>
+          </div>
+        )}
+        {((w.synonyms && w.synonyms.length > 0) || (w.antonyms && w.antonyms.length > 0)) && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {(w.synonyms || []).map((s) => (
+              <span key={"syn-" + s} className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: COLORS.okBg, color: COLORS.ok }}>
+                유= {s}
+              </span>
+            ))}
+            {(w.antonyms || []).map((s) => (
+              <span key={"ant-" + s} className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: COLORS.badBg, color: COLORS.bad }}>
+                반= {s}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <button onClick={onRemove} className="p-1.5 rounded-full hover:opacity-70">
+        <Trash2 size={15} style={{ color: COLORS.bad }} />
+      </button>
     </div>
   );
 }
@@ -1343,6 +1422,7 @@ function PassageExtractTab({ config, setConfig }) {
     "word": "지문에 등장한 단어(원형 또는 지문 속 활용형)",
     "meaning": "간결한 한국어 뜻",
     "example": "이 단어가 포함된 지문 속 문장을 원문 그대로 인용",
+    "exampleKo": "위 example 문장을 자연스러운 한국어로 번역",
     "synonyms": ["같은 수준의 유의어 (영어, 최대 2개)"],
     "antonyms": ["같은 수준의 반의어 (영어, 있는 경우만 최대 2개)"]
   }
@@ -1361,6 +1441,7 @@ ${passage.trim()}
           word: (p.word || "").trim(),
           meaning: (p.meaning || "").trim(),
           example: (p.example || "").trim(),
+          exampleKo: (p.exampleKo || "").trim(),
           synonyms: Array.isArray(p.synonyms) ? p.synonyms.join(", ") : "",
           antonyms: Array.isArray(p.antonyms) ? p.antonyms.join(", ") : "",
           include: true,
@@ -1408,6 +1489,7 @@ ${passage.trim()}
       word: e.word,
       meaning: e.meaning,
       example: e.example,
+      exampleKo: e.exampleKo,
       folder: destFolder.trim() || DEFAULT_FOLDER,
       synonyms: e.synonyms.split(",").map((s) => s.trim()).filter(Boolean),
       antonyms: e.antonyms.split(",").map((s) => s.trim()).filter(Boolean),
@@ -1432,7 +1514,7 @@ ${passage.trim()}
           <SectionTitle>지문에서 단어 자동 추출</SectionTitle>
         </div>
         <p className="text-xs mt-1" style={{ color: COLORS.inkSoft }}>
-          영어 지문을 붙여넣으면 고1 수준의 핵심 어휘와 뜻, 예문, 유의어·반의어까지 자동으로 뽑아줘요. 결과는 추가하기 전에 검토·수정할 수 있어요.
+          영어 지문을 붙여넣으면 고1 수준의 핵심 어휘와 뜻, 예문, 해석, 유의어·반의어까지 자동으로 뽑아줘요. 결과는 추가하기 전에 검토·수정할 수 있어요.
         </p>
         <textarea
           value={passage}
@@ -1566,6 +1648,13 @@ ${passage.trim()}
                         placeholder="예문"
                         value={e.example}
                         onChange={(v) => updateEntry(e.id, "example", v)}
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Input
+                        placeholder="예문 해석 (한글)"
+                        value={e.exampleKo}
+                        onChange={(v) => updateEntry(e.id, "exampleKo", v)}
                       />
                     </div>
                     <Input
@@ -2163,14 +2252,10 @@ function StudentView() {
         )}
         {currentQ.type === "blank" && (
           <>
-            <p className="text-sm" style={{ color: COLORS.inkSoft }}>빈칸에 알맞은 단어를 쓰세요</p>
-            <p className="text-lg mt-1">{currentQ.prompt}</p>
-            <p
-              className="text-sm mt-1.5 mb-4 inline-block px-2 py-1 rounded"
-              style={{ background: COLORS.okBg, color: COLORS.ok }}
-            >
-              뜻: {currentQ.word.meaning}
+            <p className="text-sm" style={{ color: COLORS.inkSoft }}>
+              다음 문장의 뜻을 보고, 빈칸에 들어갈 영단어를 쓰세요
             </p>
+            <p className="font-serif text-xl mt-1 mb-4">{currentQ.prompt}</p>
           </>
         )}
 
@@ -2197,7 +2282,7 @@ function StudentView() {
         ) : (
           <div className="flex gap-2">
             <Input
-              placeholder="정답 입력"
+              placeholder="빈칸에 들어갈 단어 입력"
               value={blankInput}
               onChange={setBlankInput}
               onEnter={checkBlank}

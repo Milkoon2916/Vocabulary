@@ -1307,6 +1307,7 @@ function PassageExtractTab({ config, setConfig }) {
   const [destFolder, setDestFolder] = useState(DEFAULT_FOLDER);
   const [extractCount, setExtractCount] = useState(20);
   const [minExtractCount, setMinExtractCount] = useState(5);
+  const [difficulty, setDifficulty] = useState("standard");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -1319,9 +1320,22 @@ function PassageExtractTab({ config, setConfig }) {
     setLoading(true);
     setError("");
     setExtracted([]);
-    const prompt = `당신은 한국 고등학교 1학년(고1) 영어 어휘 학습 자료를 만드는 도우미입니다.
-아래 영어 지문에서 고1 학습자에게 유용한 핵심 어휘를 최소 ${minExtractCount}개, 최대 ${extractCount}개 골라주세요.
-가능하면 반드시 최소 개수 이상을 채워주세요 — 지문에 실제로 등장하는 단어라면, 아주 쉬운 단어라도 좋으니 최소 개수를 맞추는 걸 우선하세요. 지문 자체가 너무 짧아서 그래도 최소 개수를 못 채운다면 나오는 만큼만 골라도 됩니다. 같은 단어를 중복해서 넣지 마세요.
+    const DIFFICULTY_INSTRUCTIONS = {
+      standard:
+        "고1 교과서·모의고사에 나올 법한 필수 어휘 수준으로 골라주세요. 초등·중학교 기초 단어(예: happy, big, run, nice, want, like, said, went 같은 이미 다 아는 기초 단어)는 절대 포함하지 마세요.",
+      advanced:
+        "고1~2 심화 수준 또는 수능 대비 어휘 위주로 골라주세요. 중학교~고1 기초 단어는 모두 제외하고, 다음을 우선하세요: 학생들이 뜻을 모를 가능성이 높은 단어, 문맥에 따라 뜻이 여러 개인 다의어, 추상적인 개념을 나타내는 단어.",
+      expert:
+        "수능 고난도 어휘·고3 수준의 단어 위주로 골라주세요. 일상적으로 자주 쓰이는 단어는 모두 제외하고, 학술적·추상적인 단어, 자주 헷갈리는 다의어, 격식체 어휘를 우선하세요.",
+    };
+    const difficultyNote = DIFFICULTY_INSTRUCTIONS[difficulty] || DIFFICULTY_INSTRUCTIONS.standard;
+
+    const prompt = `당신은 한국 고등학교 영어 어휘 학습 자료를 만드는 도우미입니다.
+아래 영어 지문에서 학습자에게 유용한 핵심 어휘를 최소 ${minExtractCount}개, 최대 ${extractCount}개 골라주세요.
+
+난이도 기준: ${difficultyNote}
+
+개수보다 난이도 기준이 더 중요합니다 — 기준에 맞는 단어가 부족해서 최소 개수를 못 채우더라도, 기준에 안 맞는 쉬운 단어로 억지로 채우지 마세요. 나오는 만큼만 골라도 됩니다. 같은 단어를 중복해서 넣지 마세요.
 다른 설명이나 인사말, 마크다운 코드블록 없이 순수 JSON 배열만 출력하세요. 각 항목은 아래 형식을 따르세요.
 
 [
@@ -1329,8 +1343,8 @@ function PassageExtractTab({ config, setConfig }) {
     "word": "지문에 등장한 단어(원형 또는 지문 속 활용형)",
     "meaning": "간결한 한국어 뜻",
     "example": "이 단어가 포함된 지문 속 문장을 원문 그대로 인용",
-    "synonyms": ["고1 수준 유의어 (영어, 최대 2개)"],
-    "antonyms": ["고1 수준 반의어 (영어, 있는 경우만 최대 2개)"]
+    "synonyms": ["같은 수준의 유의어 (영어, 최대 2개)"],
+    "antonyms": ["같은 수준의 반의어 (영어, 있는 경우만 최대 2개)"]
   }
 ]
 
@@ -1444,6 +1458,19 @@ ${passage.trim()}
                 <option key={f} value={f} />
               ))}
             </datalist>
+          </div>
+          <div>
+            <label className="text-xs" style={{ color: COLORS.inkSoft }}>난이도</label>
+            <select
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value)}
+              className="block mt-1 p-2 rounded-lg text-sm outline-none"
+              style={{ border: `1px solid ${COLORS.line}`, fontSize: "16px" }}
+            >
+              <option value="standard">고1 필수</option>
+              <option value="advanced">고1~2 심화 · 수능 대비</option>
+              <option value="expert">수능 고난도 · 고3</option>
+            </select>
           </div>
           <div>
             <label className="text-xs" style={{ color: COLORS.inkSoft }}>최소 단어 수</label>

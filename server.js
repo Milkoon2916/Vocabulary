@@ -139,7 +139,7 @@ app.post("/api/ai/generate", async (req, res) => {
     // 없으면 서버 환경변수(GEMINI_MODEL), 그것도 없으면 기본값을 사용해요.
     // gemini-2.0-flash는 서비스가 종료됐으니 기본값은 현재 무료 등급에 있는 모델로 둬요.
     const model =
-      req.get("x-gemini-model") || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+      req.get("x-gemini-model") || process.env.GEMINI_MODEL || "gemini-3-flash";
 
     let geminiRes = await callGemini(apiKey, model, promptText, max_tokens);
     let geminiData = await geminiRes.json();

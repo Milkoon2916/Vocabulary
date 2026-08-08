@@ -135,7 +135,11 @@ app.post("/api/ai/generate", async (req, res) => {
     const { max_tokens, messages } = req.body || {};
     // 클라이언트는 [{ role: "user", content: "..." }] 형태로 하나만 보내요.
     const promptText = (messages || []).map((m) => m.content).join("\n");
-    const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+    // 선생님이 앱의 "AI 키 설정"에서 직접 고른 모델(x-gemini-model 헤더)을 우선 사용하고,
+    // 없으면 서버 환경변수(GEMINI_MODEL), 그것도 없으면 기본값을 사용해요.
+    // gemini-2.0-flash는 서비스가 종료됐으니 기본값은 현재 무료 등급에 있는 모델로 둬요.
+    const model =
+      req.get("x-gemini-model") || process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
     let geminiRes = await callGemini(apiKey, model, promptText, max_tokens);
     let geminiData = await geminiRes.json();

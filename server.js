@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
-app.use(express.json({ limit: "8mb" }));
+app.use(express.json({ limit: "40mb" }));
 
 // ---------- 파일 기반 key-value 저장소 ----------
 // Render에 "영구 디스크(Persistent Disk)"를 /app/data 에 마운트하면

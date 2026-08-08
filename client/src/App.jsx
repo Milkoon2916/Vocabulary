@@ -385,8 +385,12 @@ function buildQuiz(wordsets, wordStats, count, distractorPool) {
 
   return picked.map((word) => {
     const others = dPool.filter((w) => w.id !== word.id);
-    // 빈칸(주관식) 문제는 "문장 전체의 한글 해석"이 있어야 낼 수 있어요.
-    const canBlank = word.exampleKo && word.exampleKo.trim().length > 0;
+    // 빈칸(주관식) 문제는 "단어가 포함된 영어 예문"과 "그 예문의 한글 해석"이 둘 다 있어야 낼 수 있어요.
+    const canBlank =
+      word.exampleKo &&
+      word.exampleKo.trim().length > 0 &&
+      word.example &&
+      word.example.toLowerCase().includes(word.word.toLowerCase());
     const hasSyn = (word.synonyms || []).length > 0;
     const hasAnt = (word.antonyms || []).length > 0;
     const typeChoices = ["meaning", "word"];
@@ -447,12 +451,16 @@ function buildQuiz(wordsets, wordStats, count, distractorPool) {
         answer,
       };
     }
-    // blank: 문장 전체의 한글 해석을 보여주고, 학생이 빈칸에 들어갈 영단어를 직접 입력
+    // blank: 빈칸이 뚫린 영어 예문 + 문장 전체의 한글 해석을 함께 보여주고,
+    // 학생이 빈칸에 들어갈 영단어를 직접 입력
+    const re = new RegExp(word.word, "i");
+    const blankedSentence = word.example.replace(re, "_____");
     return {
       id: word.id,
       word,
       type,
-      prompt: word.exampleKo,
+      prompt: blankedSentence,
+      promptKo: word.exampleKo,
       answer: word.word,
     };
   });
@@ -2369,9 +2377,15 @@ function StudentView() {
         {currentQ.type === "blank" && (
           <>
             <p className="text-sm" style={{ color: COLORS.inkSoft }}>
-              다음 문장의 뜻을 보고, 빈칸에 들어갈 영단어를 쓰세요
+              빈칸에 알맞은 단어를 쓰세요
             </p>
-            <p className="font-serif text-xl mt-1 mb-4">{currentQ.prompt}</p>
+            <p className="font-serif text-xl mt-1">{currentQ.prompt}</p>
+            <p
+              className="text-sm mt-1.5 mb-4 inline-block px-2 py-1 rounded"
+              style={{ background: COLORS.okBg, color: COLORS.ok }}
+            >
+              해석: {currentQ.promptKo}
+            </p>
           </>
         )}
 

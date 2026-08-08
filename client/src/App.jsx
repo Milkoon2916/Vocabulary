@@ -2023,6 +2023,10 @@ function ResultsTab({ config }) {
         .sort((a, b) => b.wrong - a.wrong)
     : [];
 
+  const totalCorrect = rows.reduce((sum, r) => sum + r.correct, 0);
+  const totalWrong = rows.reduce((sum, r) => sum + r.wrong, 0);
+  const totalAttempts = totalCorrect + totalWrong;
+
   return (
     <div className="space-y-4">
       <Card>
@@ -2040,6 +2044,19 @@ function ResultsTab({ config }) {
           ))}
         </select>
       </Card>
+
+      {!loading && totalAttempts > 0 && (
+        <Card>
+          <SectionTitle>전체 누적 결과</SectionTitle>
+          <p className="font-serif text-3xl mt-2">
+            {totalAttempts}개 중 <span style={{ color: COLORS.ok }}>{totalCorrect}개</span> 정답
+          </p>
+          <p className="text-sm mt-1" style={{ color: COLORS.inkSoft }}>
+            정답률 {Math.round((totalCorrect / totalAttempts) * 100)}% · 오답 {totalWrong}개
+            (지금까지 이 학생이 푼 모든 퀴즈를 합친 결과예요)
+          </p>
+        </Card>
+      )}
 
       <Card>
         <SectionTitle>단어별 정답/오답</SectionTitle>

@@ -46,7 +46,7 @@ function genCode(existing) {
   return code;
 }
 
-const MAX_WORDS = 200; // 등록/시험 단어 상한
+const MAX_WORDS = 50000; // 등록/시험 단어 상한 (사실상 무제한 수준)
 const DEFAULT_FOLDER = "기본";
 const ALL_FOLDERS = "전체";
 

@@ -116,13 +116,14 @@ async function kvSet(key, value) {
 // ---------- 선생님 개인 Gemini API 키 (브라우저에만 저장, 서버 DB로는 전송·저장하지 않음) ----------
 const TEACHER_API_KEY_STORAGE = "vocabQuiz.teacherGeminiApiKey";
 const TEACHER_MODEL_STORAGE = "vocabQuiz.teacherGeminiModel";
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+const DEFAULT_GEMINI_MODEL = "gemini-3-flash";
 // 구글이 모델을 자주 교체/폐기하기 때문에, 목록에 없는 최신 모델명은 "직접 입력"으로 넣을 수 있게 해요.
+// gemini-2.5-flash는 신규 발급 키(신규 프로젝트)에서는 더 이상 사용할 수 없어서 목록에서 뺐어요.
 const GEMINI_MODEL_OPTIONS = [
-  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (기본값 · 무료 등급)" },
-  { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite (더 빠르고 가벼움)" },
-  { value: "gemini-3-flash", label: "Gemini 3 Flash (최신)" },
-  { value: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite (최신 · 경량)" },
+  { value: "gemini-3-flash", label: "Gemini 3 Flash (기본값 · 무료 등급)" },
+  { value: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite (더 빠르고 가벼움)" },
+  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (예전 키에서만 동작)" },
+  { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite (예전 키에서만 동작)" },
 ];
 
 function getTeacherApiKey() {

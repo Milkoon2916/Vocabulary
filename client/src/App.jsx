@@ -115,6 +115,15 @@ async function kvSet(key, value) {
 
 // ---------- 선생님 개인 Gemini API 키 (브라우저에만 저장, 서버 DB로는 전송·저장하지 않음) ----------
 const TEACHER_API_KEY_STORAGE = "vocabQuiz.teacherGeminiApiKey";
+const TEACHER_MODEL_STORAGE = "vocabQuiz.teacherGeminiModel";
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+// 구글이 모델을 자주 교체/폐기하기 때문에, 목록에 없는 최신 모델명은 "직접 입력"으로 넣을 수 있게 해요.
+const GEMINI_MODEL_OPTIONS = [
+  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (기본값 · 무료 등급)" },
+  { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite (더 빠르고 가벼움)" },
+  { value: "gemini-3-flash", label: "Gemini 3 Flash (최신)" },
+  { value: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite (최신 · 경량)" },
+];
 
 function getTeacherApiKey() {
   try {
@@ -129,6 +138,21 @@ function setTeacherApiKey(key) {
     else localStorage.removeItem(TEACHER_API_KEY_STORAGE);
   } catch {
     // 브라우저가 localStorage를 막아둔 경우 조용히 무시 (서버 기본 키로 대체됨)
+  }
+}
+function getTeacherModel() {
+  try {
+    return localStorage.getItem(TEACHER_MODEL_STORAGE) || DEFAULT_GEMINI_MODEL;
+  } catch {
+    return DEFAULT_GEMINI_MODEL;
+  }
+}
+function setTeacherModel(model) {
+  try {
+    if (model) localStorage.setItem(TEACHER_MODEL_STORAGE, model);
+    else localStorage.removeItem(TEACHER_MODEL_STORAGE);
+  } catch {
+    // 브라우저가 localStorage를 막아둔 경우 조용히 무시 (서버 기본값으로 대체됨)
   }
 }
 
@@ -241,6 +265,8 @@ async function callClaudeJsonArray(prompt, maxTokens) {
     const headers = { "Content-Type": "application/json" };
     const personalKey = getTeacherApiKey();
     if (personalKey) headers["x-gemini-api-key"] = personalKey;
+    const personalModel = getTeacherModel();
+    if (personalModel) headers["x-gemini-model"] = personalModel;
     response = await fetch("/api/ai/generate", {
       method: "POST",
       headers,
@@ -447,20 +473,28 @@ export default function App() {
   };
 
   return (
-    <div
-      className="min-h-screen w-full flex flex-col items-center py-8 px-4"
-      style={{ background: COLORS.bg, color: COLORS.ink }}
-    >
-      <div className="w-full max-w-3xl">
-        <Header role={role} onHome={goHome} />
-        {role === "select" && <RoleSelect onSelect={setRole} />}
-        {role === "teacher" && !teacherUnlocked && (
-          <TeacherPasswordGate onSuccess={() => setTeacherUnlocked(true)} />
-        )}
-        {role === "teacher" && teacherUnlocked && <TeacherView />}
-        {role === "student" && <StudentView />}
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap');
+        html, body, #root, * {
+          font-family: 'Nanum Gothic', sans-serif !important;
+        }
+      `}</style>
+      <div
+        className="min-h-screen w-full flex flex-col items-center py-8 px-4"
+        style={{ background: COLORS.bg, color: COLORS.ink }}
+      >
+        <div className="w-full max-w-3xl">
+          <Header role={role} onHome={goHome} />
+          {role === "select" && <RoleSelect onSelect={setRole} />}
+          {role === "teacher" && !teacherUnlocked && (
+            <TeacherPasswordGate onSuccess={() => setTeacherUnlocked(true)} />
+          )}
+          {role === "teacher" && teacherUnlocked && <TeacherView />}
+          {role === "student" && <StudentView />}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -631,9 +665,20 @@ function ApiKeySettingsTab() {
   const [keyInput, setKeyInput] = useState("");
   const [savedKey, setSavedKey] = useState("");
   const [notice, setNotice] = useState("");
+  const [model, setModel] = useState(DEFAULT_GEMINI_MODEL);
+  const [customModel, setCustomModel] = useState("");
+  const [modelNotice, setModelNotice] = useState("");
 
   useEffect(() => {
     setSavedKey(getTeacherApiKey());
+    const savedModel = getTeacherModel();
+    const isKnown = GEMINI_MODEL_OPTIONS.some((o) => o.value === savedModel);
+    if (isKnown) {
+      setModel(savedModel);
+    } else {
+      setModel("custom");
+      setCustomModel(savedModel);
+    }
   }, []);
 
   const save = () => {
@@ -652,6 +697,23 @@ function ApiKeySettingsTab() {
   };
 
   const masked = (k) => (k.length <= 8 ? "••••••••" : `${k.slice(0, 4)}••••••••${k.slice(-4)}`);
+
+  const saveModel = (nextValue) => {
+    setModel(nextValue);
+    if (nextValue === "custom") {
+      // 직접 입력 모드로 전환만 하고, 실제 저장은 입력창에 값이 있을 때 아래에서 처리
+      return;
+    }
+    setTeacherModel(nextValue);
+    setModelNotice(`사용할 모델을 "${nextValue}"로 저장했어요.`);
+  };
+
+  const saveCustomModel = () => {
+    const trimmed = customModel.trim();
+    if (!trimmed) return;
+    setTeacherModel(trimmed);
+    setModelNotice(`사용할 모델을 "${trimmed}"로 저장했어요.`);
+  };
 
   return (
     <div className="space-y-6">
@@ -723,6 +785,59 @@ function ApiKeySettingsTab() {
             Google AI Studio
           </a>
           에서 카드 등록 없이 무료로 발급받을 수 있어요.
+        </p>
+      </Card>
+
+      <Card>
+        <SectionTitle>사용할 Gemini 모델</SectionTitle>
+        <p className="text-sm mt-1" style={{ color: COLORS.inkSoft }}>
+          구글이 모델을 자주 교체·종료하기 때문에, 지금 쓰는 모델이 서비스 종료되면
+          여기서 다른 모델로 바로 바꿀 수 있어요. (예: gemini-2.0-flash는 서비스가
+          종료됐어요.)
+        </p>
+        <select
+          value={model}
+          onChange={(e) => saveModel(e.target.value)}
+          className="mt-3 w-full p-2.5 rounded-lg text-sm outline-none"
+          style={{ border: `1px solid ${COLORS.line}`, fontSize: "16px" }}
+        >
+          {GEMINI_MODEL_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+          <option value="custom">직접 입력...</option>
+        </select>
+        {model === "custom" && (
+          <div className="flex gap-3 mt-3">
+            <Input
+              placeholder="예: gemini-3-pro"
+              value={customModel}
+              onChange={setCustomModel}
+              onEnter={saveCustomModel}
+            />
+            <button
+              onClick={saveCustomModel}
+              disabled={!customModel.trim()}
+              className="px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap disabled:opacity-50"
+              style={{ background: COLORS.ok, color: "#fff" }}
+            >
+              저장
+            </button>
+          </div>
+        )}
+        {modelNotice && (
+          <p className="text-xs mt-2" style={{ color: COLORS.ok }}>{modelNotice}</p>
+        )}
+        <p className="text-xs mt-3" style={{ color: COLORS.inkSoft }}>
+          이 설정도 이 브라우저에만 저장돼요. 어떤 모델이 지금 무료 등급에 있는지는{" "}
+          <a
+            href="https://ai.google.dev/gemini-api/docs/rate-limits"
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: COLORS.ok, textDecoration: "underline" }}
+          >
+            Gemini 요율 제한 문서
+          </a>
+          에서 확인할 수 있어요.
         </p>
       </Card>
     </div>
